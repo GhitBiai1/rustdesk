@@ -1,0 +1,51 @@
+name: Custom Windows Build
+
+on:
+  workflow_dispatch:
+
+env:
+  RENDEZVOUS_SERVER: ${{ secrets.RENDEZVOUS_SERVER }}
+  RS_PUB_KEY: ${{ secrets.RS_PUB_KEY }}
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+
+      - name: Enable Flutter Windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Install LLVM
+        run: |
+          choco install -y llvm --version=15.0.2
+          echo "LIBCLANG_PATH=C:\Program Files\LLVM\bin" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Install vcpkg
+        run: |
+          git clone https://github.com/microsoft/vcpkg $env:USERPROFILE\vcpkg
+          & $env:USERPROFILE\vcpkg\bootstrap-vcpkg.bat
+          echo "VCPKG_ROOT=$env:USERPROFILE\vcpkg" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Build RustDesk
+        run: |
+          python3 build.py --portable --hwcodec --flutter
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdesk-custom-windows
+          path: ./target/release/rustdesk-portable-packer.exe
